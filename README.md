@@ -2,7 +2,6 @@
 
 A Flask-based web application designed for hospitals to manage user authentication and patient record workflows. Integrated with Oracle DB via ODBC, the app offers secure login, account creation, password changes, and patient CRUD operations.
 
-![Auth Page](screenshots/Screenshot_2025-06-27_145809.png)
 
 ## 🚀 Features
 
@@ -30,37 +29,34 @@ A Flask-based web application designed for hospitals to manage user authenticati
 git clone https://github.com/your-username/hospital-auth-patient-manager.git
 cd hospital-auth-patient-manager
 ```
-2. Create a virtual environment and activate it
+###2. Create a virtual environment and activate it
 ```
 python -m venv venv
 source venv/bin/activate   # On Windows: venv\Scripts\activate
 ```
-3. Install dependencies
+###3. Install dependencies
 ```
 pip install -r requirements.txt
 ```
 
-4. Set up Oracle ODBC DSN
+###4. Set up Oracle ODBC DSN
 Make sure your ODBC Data Source Name (DSN) is configured as oracledb.
 
-5. Run the app
+
+###5. Run the app
 ```
 python app.py
 ```
 App runs on: http://localhost:5000
 
-🔐 Default Login Flow
+##🔐 Default Login Flow
 On login, users are authenticated using either:
 
-main password
+- Main password
+- Alternate password (e.g., for emergency access)
+- Redirects to the patient dashboard
 
-alternate password (e.g., for emergency access)
-
-Session-based login
-
-Redirects to the patient dashboard
-
-✍️ Author
+##✍️ Author
 Rajasri
 B.Tech - Information Technology
 [LinkedIn](https://www.linkedin.com/in/rajasri-sampath-kumar-892046296/) | [GitHub](https://github.com/Rajasri-1406)
