@@ -1,0 +1,324 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Management</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            
+            background-color:#bfc9ca;
+          
+        }
+        .form-container {
+            width: 1000px;  /* Fixed width to 1000px */
+            height: 600px;  /* Fixed height to 500px */
+            margin: auto;
+            padding: 20px;
+            padding-top: 0px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color:rgb(111, 186, 196);
+            overflow-y: auto; /* Allow scrolling if the content overflows */
+        }
+        .form-container input, .form-container select {
+            width: 100%;
+            padding: 7px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .form-container button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .form-container button:hover {
+            background-color:#7f8c8d;
+            color: white;
+        }
+        .form-container .button-container {
+            display: flex;
+            justify-content: space-between;
+        }
+        .form-container .dphone-group {
+            display: flex;
+            gap: 10px;
+        }
+        .form-container .dphone-group select {
+            width: 25%;
+        }
+        .form-container .dphone-group input {
+            width: 75%;
+        }
+        h1{
+        color:white;    
+       text-align: center;
+        }
+        label{
+            color:white;
+        }
+        .gen {
+            display: flex;
+            gap: 10px;  /* Optional: Adds space between the radio buttons */
+            align-items: center;  /* Aligns the items in the center vertically */
+        }
+    </style>
+</head>
+<body>
+    <br><br>
+    <div class="form-container">
+        <h1>LIBRARY BOOK BORROWER FORM</h1>
+
+        <!-- Display Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul>
+                    {% for category, message in messages %}
+                        <li class="{{ category }}">{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+
+       
+        
+        <form method="POST">
+            <label for="did">Borrower ID:</label>
+            <input
+                type="text"
+                id="did"
+                name="did"
+                onblur="fetchuserdetails(this.value)"  
+                placeholder="Enter Borrower ID" required>
+            
+            <label for="dname"> Borrower Name:</label>
+            <input type="text" id="dname" name="dname">
+    
+            <label for="ddob">Date of borrow(DD-Mon-YYYY):</label>
+            <input type="text" id="ddob" name="ddob" placeholder="DD-Mon-YYYY">
+            <div class="gen">
+            <label for="dgender"> Gender:</label>
+          
+            <label for="dgender_male">Male</label>
+            <input type="radio" id="dgender_male" name="dgender" value="Male">
+            <label for="dgender_female">Female</label>
+            <input type="radio" id="dgender_female" name="dgender" value="Female">
+            </div>
+            
+            <label for="dno">No. of Books:</label>
+            <input type="number" id="dno" name="dno">
+    
+            <label for="dbname"> Book Name:</label>
+            <input type="text" id="dbname" name="dbname">
+    
+            <label for="dphone">Phone:</label>
+            <select id="country_code" name="country_code">
+                <option value="+1">+1 (US)</option>
+                <option value="+44">+44 (UK)</option>
+                <option value="+91" selected>+91 (India)</option>
+            </select>
+            <input type="text" id="dphone" name="dphone" value="{{ user_data[6] if user_data else '' }}">
+    
+            <label for="dtype">Type:</label>
+            <select id="dtype" name="dtype">
+                <option value="Student">Student</option>
+                <option value="Faculty">Faculty</option>
+            </select>
+    
+            <div class="button-container">
+                <button type="submit" name="save" {% if disable_buttons %}disabled{% endif %}>Save</button>
+                <button type="submit" name="update" {% if disable_buttons %}disabled{% endif %}>Update</button>
+                <button type="submit" name="delete" {% if disable_buttons %}disabled{% endif %}>Delete</button>
+                <button type="submit" name="commit" {% if disable_buttons %}disabled{% endif %}>Commit</button>
+                <button type="button" onclick="resetForm()" name="clear" {% if disable_buttons %}disabled{% endif %}>Clear</button>
+                <button type="button" onclick="navigateuser('previous')">Previous</button>
+                <button type="button" onclick="navigateuser('next')">Next</button>
+                
+                <button type="button" onclick="insertNextRecord()">Insert</button>
+                
+            </div>
+            
+            </form>
+        </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+    <script>
+        
+
+        function fetchuserdetails() {
+            const did = document.getElementById('did').value;
+            fetch(`/fetch_details/${did}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        populateForm(data.user);
+                        toggleButtons(data.disable_buttons);
+                    } else {
+                        resetForm();
+                        alert(data.message);
+                    }
+                });
+        }
+        async function insertNextRecord() {
+            try {
+                // Fetch the next available user ID from the server
+                const response = await fetch('/get_next_did');
+                const data = await response.json();
+        
+                if (data.success) {
+                    // Populate the a_id field with the next ID and clear other fields
+                    resetForm();
+                    document.getElementById("did").value = data.next_did;
+        
+                    // Enable all buttons for new entry
+                    setButtonState(false);
+                } else {
+                    alert(data.message || "Failed to fetch the next Passenger ID. Please try again.");
+                }
+            } catch (error) {
+                console.error("Error fetching next passenger ID:", error);
+                alert("An error occurred while fetching the next Passenger ID.");
+            }
+        }
+        
+
+        function navigateuser(direction) {
+            const did = document.getElementById('did').value;
+            fetch(`/navigate_user/${direction}/${did}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        populateForm(data.user);
+                        toggleButtons(data.disable_buttons);
+                    } else {
+                        alert(data.message);
+                    }
+                });
+        }
+
+        function populateForm(user) {
+            document.getElementById('did').value = user.did;
+            document.getElementById('dname').value = user.dname;
+            document.getElementById('ddob').value = user.ddob;
+            document.getElementById('dgender_male').checked = user.dgender === 'Male';
+            document.getElementById('dgender_female').checked = user.dgender === 'Female';
+            document.getElementById('dno').value = user.dno;
+            document.getElementById('dbname').value = user.dbname;
+            document.getElementById('dphone').value = user.dphone;
+            document.getElementById('dtype').value = user.dtype;
+        }
+
+        function toggleButtons(disable) {
+            document.querySelector("[name='save']").disabled = disable;
+            document.querySelector("[name='update']").disabled = disable;
+            document.querySelector("[name='delete']").disabled = disable;
+            document.querySelector("[name='commit']").disabled = disable;
+            document.querySelector("[name='clear']").disabled = disable;
+        }
+
+        function resetForm() {
+            document.getElementById('user-form').reset();
+        }
+        // Initialize Flatpickr for the date input
+        flatpickr("#ddob", {
+            dateFormat: "d-M-Y", // Format as dd-Mon-yyyy
+        });
+        async function fetchuserdetails(did) {
+        if (!did) {
+            resetForm();
+            return;
+        }
+
+        try {
+            const response = await fetch(`/fetch_details/${did}`);
+            const data = await response.json();
+
+            if (data.success) {
+                // Populate form with fetched data
+                document.getElementById("dname").value = data.data.dname || "";
+                document.getElementById("ddob").value = data.data.ddob || "";
+                document.getElementById("dgender_male").checked = (data.data.dgender === "Male");
+                document.getElementById("dgender_female").checked = (data.data.dgender === "Female");
+                document.getElementById("dno").value = data.data.dno || "";
+                document.getElementById("dbname").value = data.data.dbname || "";
+                document.getElementById("dphone").value = data.data.dphone || "";
+                document.getElementById("dtype").value = data.data.dtype || "";
+
+                // Enable or disable buttons based on the record's status
+                const disableButtons = data.disable_buttons;
+                setButtonState(disableButtons);
+            } else {
+                // Reset form and prepare for new entry
+                resetForm();
+                alert("The entered Passenger ID is new. Please provide the details.");
+            }
+        } catch (error) {
+            console.error("Error fetching user details:", error);
+            alert("An error occurred while fetching passenger details.");
+        }
+    }
+
+    function resetForm() {
+        // Reset all form fields except the a_id field
+        document.getElementById("dname").value = "";
+        document.getElementById("ddob").value = "";
+        document.getElementById("dgender_male").checked = false;
+        document.getElementById("dgender_female").checked = false;
+        document.getElementById("dno").value = "";
+        document.getElementById("dbname").value = "";
+        document.getElementById("dphone").value = "";
+        document.getElementById("dtype").value = "";
+
+        // Enable buttons for new entry
+        setButtonState(false);
+    }
+
+    function setButtonState(disable) {
+        // Enable or disable buttons
+        document.querySelector("[name='save']").disabled = disable;
+        document.querySelector("[name='update']").disabled = disable;
+        document.querySelector("[name='delete']").disabled = disable;
+        document.querySelector("[name='commit']").disabled = disable;
+        document.querySelector("[name='clear']").disabled = disable;
+    }
+    async function commituser() {
+    try {
+        const response = await fetch('/commit_user', {
+            method: 'POST',
+            body: new FormData(document.querySelector('form')) // Send the form data
+        });
+        const data = await response.json();
+
+        // Disable buttons if the a_id exists in main_table
+        if (data.disable_buttons) {
+            setButtonState(true);
+        }
+
+        alert(data.message || "Passenger record committed successfully.");
+    } catch (error) {
+        console.error("Error committing user:", error);
+        alert("An error occurred while committing the passenger.");
+    }
+}
+
+function setButtonState(disable) {
+    // Enable or disable all form buttons
+    document.querySelector("[name='save']").disabled = disable;
+    document.querySelector("[name='update']").disabled = disable;
+    document.querySelector("[name='delete']").disabled = disable;
+    document.querySelector("[name='commit']").disabled = disable;
+    document.querySelector("[name='clear']").disabled = disable;
+}
+
+
+        
+    </script>
+
+</body>
+</html>

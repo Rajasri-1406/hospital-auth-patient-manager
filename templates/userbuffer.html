@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buffer Table</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            font-size: 2em;
+            margin-bottom: 20px;
+        }
+
+        .buffer-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 16px;
+            text-align: left;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+        }
+
+        .buffer-table thead {
+            background-color: #007BFF;
+            color: #ffffff;
+            text-transform: uppercase;
+        }
+
+        .buffer-table th {
+            padding: 12px 15px;
+            font-weight: bold;
+        }
+
+        .buffer-table td {
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            color: #555;
+        }
+
+        .buffer-table tbody tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .buffer-table tbody tr:nth-child(odd) {
+            background-color: #ffffff;
+        }
+
+        .buffer-table tbody tr:hover {
+            background-color: #cce5ff;
+            transition: background-color 0.3s ease;
+            cursor: pointer;
+        }
+
+        .buffer-table caption {
+            font-size: 18px;
+            font-weight: bold;
+            padding: 10px;
+            background-color: #007BFF;
+            color: white;
+            border-bottom: 3px solid #0056b3;
+        }
+
+        /* Responsive design for small screens */
+        @media (max-width: 600px) {
+            .buffer-table thead {
+                display: none;
+            }
+
+            .buffer-table,
+            .buffer-table tbody,
+            .buffer-table tr,
+            .buffer-table td {
+                display: block;
+                width: 100%;
+            }
+
+            .buffer-table tr {
+                margin-bottom: 15px;
+                background-color: white;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                border-radius: 8px;
+                overflow: hidden;
+            }
+
+            .buffer-table td {
+                text-align: right;
+                padding-left: 50%;
+                position: relative;
+            }
+
+            .buffer-table td::before {
+                content: attr(data-label);
+                position: absolute;
+                left: 0;
+                width: 50%;
+                padding-left: 15px;
+                font-weight: bold;
+                text-align: left;
+                color: #333;
+            }
+        }
+    </style>
+</head>
+<body>
+    <form method="POST">
+        <h1>Buffer Table</h1>
+        <table class="buffer-table">
+            <caption>Borrower Records</caption>
+            <thead>
+                <tr>
+                    <th>Borrower ID</th>
+                    <th>Borrower Name</th>
+                    <th>Date of Borrow</th>
+                    <th>Gender</th>
+                    <th>No.of Books</th>
+                    <th>Book Name</th>
+                    <th>Phone</th>
+                    <th>Borrower Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in records %}
+                <tr>
+                    <td data-label="Borrower ID">{{ record.did }}</td>
+                    <td data-label="BorrowerName">{{ record.dname }}</td>
+                    <td data-label="Date of Borrow">{{ record.ddob }}</td>
+                    <td data-label="Gender">{{ record.dgender }}</td>
+                    <td data-label="No. of Books">{{ record.dno }}</td>
+                    <td data-label="Book Name">{{ record.dbname }}</td>
+                    <td data-label="Phone">{{ record.dphone }}</td>
+                    <td data-label="Borrower Type">{{ record.dtype }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </form>
+</body>
+</html>

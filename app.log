@@ -1,0 +1,1144 @@
+import logging
+from flask import Flask, render_template, request, redirect, url_for, session, flash,jsonify
+import pyodbc
+import datetime
+
+app = Flask(__name__)
+app.secret_key = 'your_secret_key'  # Required for session handling
+
+# ODBC connection string for Oracle Database
+ODBC_CONNECTION_STRING = "DSN=oracledb;Uid=rajasri;Pwd=Rajasri;"
+
+# Route for the authentication page
+@app.route('/', methods=['GET', 'POST'])
+def auth_page():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        action = request.form.get('action')  # Check which button was clicked
+
+        if action == 'Login':
+            try:
+                conn = pyodbc.connect(ODBC_CONNECTION_STRING)
+                cursor = conn.cursor()
+
+                # Query to validate the user
+                query = "SELECT password FROM users WHERE username = ?"
+                cursor.execute(query, (username,))
+                result1 = cursor.fetchone()
+                
+                query = "SELECT alternate_password FROM users WHERE username = ?"
+                cursor.execute(query, (username,))
+                result2 = cursor.fetchone()
+
+                if result1 and result1[0] == password:
+                    session['username'] = username  # Set session for logged-in user
+                    return redirect(url_for('index'))
+                elif result2 and result2[0] == password:
+                    session['username'] = username  # Set session for logged-in user
+                    return redirect(url_for('index'))
+                else:
+                    flash("Authentication Failed! Invalid username or password.")
+            except Exception as e:
+                logging.error(f"Login error: {e}")
+                flash("An error occurred during login. Please try again.")
+            finally:
+                conn.close()
+
+        elif action == 'Create User':
+            return redirect(url_for('create_user', action='create'))
+
+        elif action == 'Change Password':
+            return redirect(url_for('create_user', action='change'))
+
+    return render_template('auth_page.html')
+
+
+# Route for the user creation/change password page
+@app.route('/create_user', methods=['GET', 'POST'])
+def create_user():
+    action = request.args.get('action', 'create')  # Default action is 'create'
+
+    if request.method == 'POST':
+        username = request.form['username']
+        
+       
+        if action == 'create':
+            password = request.form['password']
+    #    confirm_password = request.form['confirm_password']
+            alternate_password = request.form.get('alternate_password', None)  # Handle missing key
+            try:
+                conn = pyodbc.connect(ODBC_CONNECTION_STRING)
+                cursor = conn.cursor()
+
+                # Check if the username already exists
+                query_check = "SELECT username FROM users WHERE username = ?"
+                cursor.execute(query_check, (username,))
+                existing_user = cursor.fetchone()
+
+                if existing_user:
+                    flash("Username already exists!")
+                    return redirect(url_for('create_user', action='create'))
+
+                # Insert new user into the database
+                query_insert = "INSERT INTO users (username, password, alternate_password) VALUES (?, ?, ?)"
+                cursor.execute(query_insert, (username, password, alternate_password))
+                conn.commit()
+
+                flash("User created successfully! You can now log in.")
+                return redirect(url_for('auth_page'))
+            except Exception as e:
+                logging.error(f"User creation error: {e}")
+                flash("An error occurred during user creation. Please try again.")
+            finally:
+                conn.close()
+
+        elif action == 'change':
+            current_password = request.form['current_password']
+            new_password = request.form['new_password']
+            confirm_new_password = request.form['confirm_new_password']
+
+            if new_password != confirm_new_password:
+                flash("New passwords do not match!")
+                return redirect(url_for('create_user', action='change'))
+
+            try:
+                conn = pyodbc.connect(ODBC_CONNECTION_STRING)
+                cursor = conn.cursor()
+
+                # Fetch current password from the database
+                query = "SELECT password FROM users WHERE username = ?"
+                cursor.execute(query, (username,))
+                result1 = cursor.fetchone()
+                query = "SELECT alternate_password FROM users WHERE username = ?"
+                cursor.execute(query, (username,))
+                result2 = cursor.fetchone()
+                
+
+                if result1 and result1[0] == current_password:
+                    # Update the password
+                    update_query = "UPDATE users SET password = ? WHERE username = ?"
+                    cursor.execute(update_query, (new_password, username))
+                    conn.commit()
+
+                    flash("Password changed successfully!")
+                    return redirect(url_for('auth_page'))
+                elif result2 and result2[0] == current_password:
+                    # Update the password
+                    update_query = "UPDATE users SET alternate_password = ? WHERE username = ?"
+                    cursor.execute(update_query, (new_password, username))
+                    conn.commit()
+
+                    flash("Password changed successfully!")
+                    return redirect(url_for('auth_page'))
+                else:
+                    flash("Current password is incorrect.")
+            except Exception as e:
+                logging.error(f"Password change error: {e}")
+                flash("An error occurred during password change. Please try again.")
+            finally:
+                conn.close()
+
+    return render_template('create_user.html', action=action)
+
+@app.route("/update_field", methods=["POST"])
+def update_field():
+    try:
+        data = request.get_json()  # Parse JSON payload
+        patient_id = data.get("patient_id")
+        field = data.get("field")
+        value = data.get("value")
+
+        if not patient_id or not field or not value:
+            return jsonify({"success": False, "message": "Missing required fields."}), 400
+
+        valid_fields = ["name", "dob", "gender", "age", "address", "phone", "patient_type"]
+        if field not in valid_fields:
+            return jsonify({"success": False, "message": "Invalid field selected."}), 400
+
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor()
+            query = f"UPDATE patients SET {field} = ? WHERE patient_id = ?"
+            cursor.execute(query, (value, patient_id))
+            connection.commit()
+            return jsonify({"success": True, "message": f"{field} updated successfully."})
+        else:
+            return jsonify({"success": False, "message": "Database connection failed."}), 500
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+ODBC_CONNECTION_STRING = "DSN=oracledb;Uid=rajasri;Pwd=Rajasri;"
+
+
+def get_db_connection():
+    """Establish database connection."""
+    try:
+        connection = pyodbc.connect(ODBC_CONNECTION_STRING)
+        return connection
+    except pyodbc.DatabaseError as e:
+        print(f"Error connecting to the database: {e}")
+        return None
+
+
+
+@app.route("/index", methods=["GET", "POST"])
+def index():
+    patient_data = None
+    disable_buttons = False
+
+    if request.method == "POST":
+        connection = get_db_connection()
+        cursor = None
+
+        try:
+            if connection:
+                cursor = connection.cursor()
+
+                if "fetch" in request.form:
+                    patient_id = request.form.get("patient_id")
+
+                    # Fetch patient details from `patients`
+                    cursor.execute("SELECT * FROM patients WHERE patient_id = ?", (patient_id,))
+                    patient_data = cursor.fetchone()
+
+                    if patient_data:
+                        # Check if the patient also exists in `main_table`
+                        cursor.execute("SELECT * FROM main_table WHERE patient_id = ?", (patient_id,))
+                        in_main_table = cursor.fetchone()
+
+                        if in_main_table:
+                            disable_buttons = True  # Disable buttons if record exists in both tables
+                        
+                        flash(f"Patient ID {patient_id} fetched successfully.", "info")
+                    else:
+                        flash("Patient not found.", "error")
+                        patient_data = None
+
+
+
+                elif "save" in request.form:
+                    return save_patient()
+
+                elif "update" in request.form:
+                    return update_field()
+
+                elif "delete" in request.form:
+                    return delete_patient()
+
+                elif "commit" in request.form:
+                    return commit_patient()
+
+                elif "clear" in request.form:
+                    return redirect(url_for("index"))
+
+            else:
+                flash("Database connection failed.", "error")
+
+        except Exception as e:
+            flash(f"Error: {e}", "error")
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
+
+    return render_template(
+    "patient_form.html",
+    patient_data=patient_data,
+    disable_buttons=disable_buttons,
+)
+    
+@app.route("/get_patient/<patient_id>", methods=["GET"])
+def get_patient(patient_id):
+    """Fetch a patient's details by ID."""
+    try:
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor()
+            cursor.execute("SELECT * FROM patients WHERE patient_id = ?", (patient_id,))
+            result = cursor.fetchone()
+            if result:
+                patient_data = {
+                    "patient_id": result[0],
+                    "name": result[1],
+                    "dob": result[2].strftime("%d-%b-%Y") if result[2] else None,
+                    "gender": result[3],
+                    "age": result[4],
+                    "address": result[5],
+                    "phone": result[6],
+                    "patient_type": result[7],
+                }
+                return {"success": True, "patient": patient_data}
+            else:
+                return {"success": False, "message": "Patient not found."}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+    finally:
+        if connection:
+            connection.close()
+
+
+@app.route('/get_next_patient_id', methods=['GET'])
+def get_next_patient_id():
+    """Fetch the next available patient_id in the format P001, P002, etc."""
+    try:
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor()
+
+            # Query to fetch the maximum numeric part of patient_id (excluding 'P')
+            cursor.execute("""
+                SELECT MAX(CAST(SUBSTR(patient_id, 2) AS INTEGER))
+                FROM patients
+            """)
+            result = cursor.fetchone()
+
+            # Ensure the result is processed correctly
+            max_id = result[0] if result[0] else 0  # Default to 0 if no records
+            next_id = f"P{int(max_id) + 1:03}"  # Increment and format as PXXX
+
+            cursor.close()
+            return jsonify({"success": True, "next_patient_id": next_id})
+        else:
+            return jsonify({"success": False, "message": "Database connection failed."}), 500
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+
+
+
+@app.route("/navigate_patient/<action>/<patient_id>", methods=["GET"])
+def navigate_patient(action, patient_id):
+    """Handle previous/next navigation."""
+    try:
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor()
+
+            if action == "previous":
+                # Query to fetch the previous patient record
+                cursor.execute(
+                    """
+                    SELECT * FROM patients
+                    WHERE patient_id = (
+                        SELECT MAX(patient_id)
+                        FROM patients
+                        WHERE patient_id < ?
+                    )
+                    """,
+                    (patient_id,),
+                )
+                result = cursor.fetchone()
+                if result:
+                    # Check if the patient exists in main_table
+                    cursor.execute("SELECT * FROM main_table WHERE patient_id = ?", (result[0],))
+                    in_main_table = cursor.fetchone()
+
+                    return {
+                        "success": True,
+                        "patient": {
+                            "patient_id": result[0],
+                            "name": result[1],
+                            "dob": result[2].strftime("%d-%b-%Y") if result[2] else None,
+                            "gender": result[3],
+                            "age": result[4],
+                            "address": result[5],
+                            "phone": result[6],
+                            "patient_type": result[7],
+                        },
+                        "disable_buttons": bool(in_main_table),  # Disable buttons if in main_table
+                    }
+                else:
+                    return {"success": False, "message": "This is the first record."}
+
+            elif action == "next":
+                # Query to fetch the next patient record
+                cursor.execute(
+                    """
+                    SELECT * FROM patients
+                    WHERE patient_id = (
+                        SELECT MIN(patient_id)
+                        FROM patients
+                        WHERE patient_id > ?
+                    )
+                    """,
+                    (patient_id,),
+                )
+                result = cursor.fetchone()
+                if result:
+                    # Check if the patient exists in main_table
+                    cursor.execute("SELECT * FROM main_table WHERE patient_id = ?", (result[0],))
+                    in_main_table = cursor.fetchone()
+
+                    return {
+                        "success": True,
+                        "patient": {
+                            "patient_id": result[0],
+                            "name": result[1],
+                            "dob": result[2].strftime("%d-%b-%Y") if result[2] else None,
+                            "gender": result[3],
+                            "age": result[4],
+                            "address": result[5],
+                            "phone": result[6],
+                            "patient_type": result[7],
+                        },
+                        "disable_buttons": bool(in_main_table),  # Disable buttons if in main_table
+                    }
+                else:
+                    return {"success": False, "message": "This is the last record."}
+
+    except pyodbc.Error as e:
+        # Handle specific database error
+        print(f"Database error occurred: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+    except Exception as e:
+        # General exception handling
+        print(f"Error occurred: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+    finally:
+        # Ensure the connection is always closed
+        if connection:
+            connection.close()
+
+    """Handle previous/next navigation."""
+    try:
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor()
+
+            if action == "previous":
+                cursor.execute(
+                    """
+                    SELECT * FROM patients
+                    WHERE patient_id = (
+                        SELECT MAX(patient_id)
+                        FROM patients
+                        WHERE patient_id < ?
+                    )
+                    """,
+                    (patient_id,),
+                )
+                result = cursor.fetchone()
+                if result:
+                    # Check if the patient exists in main_table
+                    cursor.execute("SELECT * FROM main_table WHERE patient_id = ?", (result[0],))
+                    in_main_table = cursor.fetchone()
+
+                    return {
+                        "success": True,
+                        "patient": {
+                            "patient_id": result[0],
+                            "name": result[1],
+                            "dob": result[2].strftime("%d-%b-%Y") if result[2] else None,
+                            "gender": result[3],
+                            "age": result[4],
+                            "address": result[5],
+                            "phone": result[6],
+                            "patient_type": result[7],
+                        },
+                        "disable_buttons": bool(in_main_table),  # Disable buttons if in main_table
+                    }
+                else:
+                    return {"success": False, "message": "This is the first record."}
+
+            elif action == "next":
+                cursor.execute(
+                    """
+                    SELECT * FROM patients
+                    WHERE patient_id = (
+                        SELECT MIN(patient_id)
+                        FROM patients
+                        WHERE patient_id > ?
+                    )
+                    """,
+                    (patient_id,),
+                )
+                result = cursor.fetchone()
+                if result:
+                    # Check if the patient exists in main_table
+                    cursor.execute("SELECT * FROM main_table WHERE patient_id = ?", (result[0],))
+                    in_main_table = cursor.fetchone()
+
+                    return {
+                        "success": True,
+                        "patient": {
+                            "patient_id": result[0],
+                            "name": result[1],
+                            "dob": result[2].strftime("%d-%b-%Y") if result[2] else None,
+                            "gender": result[3],
+                            "age": result[4],
+                            "address": result[5],
+                            "phone": result[6],
+                            "patient_type": result[7],
+                        },
+                        "disable_buttons": bool(in_main_table),  # Disable buttons if in main_table
+                    }
+                else:
+                    return {"success": False, "message": "This is the last record."}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+    finally:
+        if connection:
+            connection.close()
+
+
+@app.route("/fetch_details/<patient_id>", methods=["GET"])
+def fetch_details(patient_id):
+    """Fetch patient details and determine button status."""
+    response = {"success": False, "data": None, "disable_buttons": False}
+
+    try:
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor()
+
+            # Fetch details from `patients` table
+            cursor.execute("SELECT * FROM patients WHERE patient_id = ?", (patient_id,))
+            patient_data = cursor.fetchone()
+
+            if patient_data:
+                # Check if the record exists in `main_table`
+                cursor.execute("SELECT * FROM main_table WHERE patient_id = ?", (patient_id,))
+                in_main_table = cursor.fetchone()
+
+                # Disable buttons if the record is in both tables
+                response["disable_buttons"] = bool(in_main_table)
+                response["data"] = {
+                    "patient_id": patient_data[0],
+                    "name": patient_data[1],
+                    "dob": patient_data[2].strftime("%d-%b-%Y") if patient_data[2] else "",
+                    "gender": patient_data[3],
+                    "age": patient_data[4],
+                    "address": patient_data[5],
+                    "phone": patient_data[6],
+                    "patient_type": patient_data[7],
+                }
+                response["success"] = True
+    except Exception as e:
+        response["error"] = str(e)
+    finally:
+        if connection:
+            connection.close()
+
+    return response
+
+
+def save_patient():
+    """Save a new patient record."""
+    patient_id = request.form.get("patient_id")
+    name = request.form.get("name")
+    dob = request.form.get("dob")
+   
+
+    
+    gender = request.form.get("gender")
+    age = request.form.get("age")
+    address = request.form.get("address")
+    phone = request.form.get("phone")
+    patient_type = request.form.get("patient_type")
+
+    # Validate input
+    if not all([patient_id, name, dob, gender, age, address, phone, patient_type]):
+        flash("All fields are required!", "error")
+        return redirect(url_for("index"))
+
+    try:
+        dob = datetime.datetime.strptime(dob, "%d-%b-%Y").strftime("%d-%b-%Y")
+    except ValueError:
+        flash("Invalid date format. Use dd-Mon-yyyy (e.g., 02-Dec-2024).", "error")
+        return redirect(url_for("index"))
+
+    try:
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor()
+            cursor.execute(
+                """
+                INSERT INTO patients (patient_id, name, dob, gender, age, address, phone, patient_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                patient_id, name, dob, gender, age, address, phone, patient_type,
+            )
+            connection.commit()
+            flash("Patient record saved successfully.", "success")
+        else:
+            flash("Database connection failed.", "error")
+    except pyodbc.DatabaseError as e:
+        flash(f"Database error: {e}", "error")
+    finally:
+        if connection:
+            connection.close()
+
+    return redirect(url_for("index"))
+
+
+def update_patient():
+    """Update an existing patient record."""
+    patient_id = request.form.get("patient_id")
+    name = request.form.get("name")
+    dob = request.form.get("dob")
+    gender = request.form.get("gender")
+    age = request.form.get("age")
+    address = request.form.get("address")
+    phone = request.form.get("phone")
+    patient_type = request.form.get("patient_type")
+
+    try:
+        dob = datetime.datetime.strptime(dob, "%d-%b-%Y").strftime("%d-%b-%Y")
+    except ValueError:
+        flash("Invalid date format. Use dd-Mon-yyyy (e.g., 02-Dec-2024).", "error")
+        return redirect(url_for("index"))
+
+    try:
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor()
+            cursor.execute(
+                """
+                UPDATE patients
+                SET name = ?, dob = ?, gender = ?, age = ?, address = ?, phone = ?, patient_type = ?
+                WHERE patient_id = ?
+                """,
+                name, dob, gender, age, address, phone, patient_type, patient_id,
+            )
+            connection.commit()
+            flash("Patient record updated successfully.", "success")
+        else:
+            flash("Database connection failed.", "error")
+    except pyodbc.DatabaseError as e:
+        flash(f"Database error: {e}", "error")
+    finally:
+        if connection:
+            connection.close()
+
+    return redirect(url_for("index"))
+
+
+def delete_patient():
+    """Delete a patient record."""
+    patient_id = request.form.get("patient_id")
+    try:
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor()
+            cursor.execute("DELETE FROM patients WHERE patient_id = ?", (patient_id,))
+            connection.commit()
+            flash("Patient record deleted successfully.", "success")
+        else:
+            flash("Database connection failed.", "error")
+    except pyodbc.DatabaseError as e:
+        flash(f"Database error: {e}", "error")
+    finally:
+        if connection:
+            connection.close()
+
+    return redirect(url_for("index"))
+
+
+def commit_patient():
+    """Commit patient record to main_table with conditional logic."""
+    patient_id = request.form.get("patient_id")
+    name = request.form.get("name")
+    dob = request.form.get("dob")
+    gender = request.form.get("gender")
+    age = request.form.get("age")
+    address = request.form.get("address")
+    phone = request.form.get("phone")
+    patient_type = request.form.get("patient_type")
+
+    try:
+        # Validate date format
+        dob = datetime.datetime.strptime(dob, "%d-%b-%Y").strftime("%d-%b-%Y")
+    except ValueError:
+        flash("Invalid date format. Use dd-Mon-yyyy (e.g., 02-Dec-2024).", "error")
+        return redirect(url_for("index"))
+
+    try:
+        connection = get_db_connection()
+        if not connection:
+            flash("Database connection failed.", "error")
+            return redirect(url_for("index"))
+
+        cursor = connection.cursor()
+
+        # Check if patient_id exists in the patients table
+        cursor.execute("SELECT * FROM patients WHERE patient_id = ?", (patient_id,))
+        patient = cursor.fetchone()
+
+        if patient:
+            # Copy the patient to main_table if found in patients
+            cursor.execute(
+                """
+                INSERT INTO main_table (patient_id, name, dob, gender, age, address, phone, patient_type)
+                SELECT patient_id, name, dob, gender, age, address, phone, patient_type
+                FROM patients WHERE patient_id = ?
+                """,
+                (patient_id,)
+            )
+            flash("Patient record committed to main_table.", "success")
+        else:
+            # Check if the patient exists in main_table
+            cursor.execute("SELECT * FROM main_table WHERE patient_id = ?", (patient_id,))
+            in_main_table = cursor.fetchone()
+
+            if not in_main_table:
+                # Save in both tables if not found in either
+                cursor.execute(
+                    """
+                    INSERT INTO patients (patient_id, name, dob, gender, age, address, phone, patient_type)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (patient_id, name, dob, gender, age, address, phone, patient_type)
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO main_table (patient_id, name, dob, gender, age, address, phone, patient_type)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (patient_id, name, dob, gender, age, address, phone, patient_type)
+                )
+                flash("Patient record saved in both patients and main_table.", "success")
+            else:
+                flash("Patient already exists in main_table.", "info")
+
+        connection.commit()
+    except pyodbc.DatabaseError as e:
+        flash(f"Database error: {e}", "error")
+    except Exception as e:
+        flash(f"Unexpected error: {e}", "error")
+    finally:
+        if connection:
+            connection.close()
+
+    return redirect(url_for("index"))
+
+
+
+@app.route('/view_buffer', methods=['GET'])
+def view_buffer():
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM patients")
+            buffer_records = cursor.fetchall()
+
+        records_list = [
+            {
+                'patient_id': row[0],
+                'name': row[1],
+                'dob': row[2],
+                'gender': row[3],
+                'age': row[4],
+                'address': row[5],
+                'phone': row[6],
+		'patient_type': row[7],
+            }
+
+            for row in buffer_records
+        ]
+        return render_template('buffer_table.html', records=records_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+
+patient_form.html
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Details Form</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            
+            background-color:#bfc9ca;
+          
+        }
+        .form-container {
+            width: 1000px;  /* Fixed width to 1000px */
+            height: 600px;  /* Fixed height to 500px */
+            margin: auto;
+            padding: 20px;
+            padding-top: 0px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color:rgb(111, 186, 196);
+            overflow-y: auto; /* Allow scrolling if the content overflows */
+        }
+        .form-container input, .form-container select {
+            width: 100%;
+            padding: 7px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .form-container button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .form-container button:hover {
+            background-color:#7f8c8d;
+            color: white;
+        }
+        .form-container .button-container {
+            display: flex;
+            justify-content: space-between;
+        }
+        .form-container .phone-group {
+            display: flex;
+            gap: 10px;
+        }
+        .form-container .phone-group select {
+            width: 25%;
+        }
+        .form-container .phone-group input {
+            width: 75%;
+        }
+        h1{
+        color:white;    
+       text-align: center;
+        }
+        label{
+            color:white;
+        }
+        .gen {
+            display: flex;
+            gap: 10px;  /* Optional: Adds space between the radio buttons */
+            align-items: center;  /* Aligns the items in the center vertically */
+        }
+    </style>
+</head>
+<body>
+    <br><br>
+    <div class="form-container">
+        <h1>Patient Details Form</h1>
+
+        <!-- Display Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul>
+                    {% for category, message in messages %}
+                        <li class="{{ category }}">{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+
+       
+        
+        <form method="POST">
+            <label for="patient_id">Patient ID:</label>
+            <input
+                type="text"
+                id="patient_id"
+                name="patient_id"
+                onblur="fetchPatientDetails(this.value)"  
+                placeholder="Enter Patient ID" required>
+            
+            <label for="name">Name:</label>
+            <input type="text" id="name" name="name">
+    
+            <label for="dob">Date of Birth (DD-Mon-YYYY):</label>
+            <input type="text" id="dob" name="dob" placeholder="DD-Mon-YYYY">
+            <div class="gen">
+            <label for="gender">Gender:</label>
+          
+            <label for="gender_male">Male</label>
+            <input type="radio" id="gender_male" name="gender" value="Male">
+            <label for="gender_female">Female</label>
+            <input type="radio" id="gender_female" name="gender" value="Female">
+            </div>
+            
+            <label for="age">Age:</label>
+            <input type="number" id="age" name="age">
+    
+            <label for="address">Address:</label>
+            <input type="text" id="address" name="address">
+    
+            <label for="phone">Phone:</label>
+            <select id="country_code" name="country_code">
+                <option value="+1">+1 (US)</option>
+                <option value="+44">+44 (UK)</option>
+                <option value="+91" selected>+91 (India)</option>
+            </select>
+            <input type="text" id="phone" name="phone" value="{{ patient_data[6] if patient_data else '' }}">
+    
+            <label for="patient_type">Patient Type:</label>
+            <select id="patient_type" name="patient_type">
+                <option value="VIP">VIP</option>
+                <option value="Normal">Normal</option>
+            </select>
+    
+            <div class="button-container">
+                <button type="submit" name="save" {% if disable_buttons %}disabled{% endif %}>Save</button>
+                <button type="submit" name="update"onclick="openUpdateModal()" {% if disable_buttons %}disabled{% endif %}>Update</button>
+                <button type="submit" name="delete" {% if disable_buttons %}disabled{% endif %}>Delete</button>
+                <button type="submit" name="commit" {% if disable_buttons %}disabled{% endif %}>Commit</button>
+                <button type="button" onclick="resetForm()" name="clear" {% if disable_buttons %}disabled{% endif %}>Clear</button>
+                <button type="button" onclick="navigatePatient('previous')">Previous</button>
+                <button type="button" onclick="navigatePatient('next')">Next</button>
+                
+                <button type="button" onclick="insertNextRecord()">Insert</button>
+
+                <div id="updateModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:white; padding:20px; border:1px solid #ccc; box-shadow:0px 4px 8px rgba(0,0,0,0.2); z-index:1000;">
+                    <h3>Select a Field to Update</h3>
+                    <select id="fieldSelector">
+                        <option value="">-- Select Field --</option>
+                        <option value="name">Name</option>
+                        <option value="dob">Date of Birth</option>
+                        <option value="gender">Gender</option>
+                        <option value="age">Age</option>
+                        <option value="address">Address</option>
+                        <option value="phone">Phone</option>
+                        <option value="patient_type">Patient Type</option>
+                    </select>
+                    <br><br>
+                    <button onclick="updateSelectedField()">Confirm</button>
+                    <button onclick="closeModal()">Cancel</button>
+                </div>
+                
+            </div>
+            
+            </form>
+        </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+    <script>
+        function openUpdateModal() {
+            document.getElementById("updateModal").style.display = "block";
+        }
+    
+        function closeModal() {
+            document.getElementById("updateModal").style.display = "none";
+        }
+    
+        function updateSelectedField() {
+            const selectedField = document.getElementById("fieldSelector").value;
+            if (!selectedField) {
+                alert("Please select a field to update.");
+                return;
+            }
+    
+            const patientId = document.getElementById("patient_id").value;
+            if (!patientId) {
+                alert("Please enter a Patient ID first.");
+                closeModal();
+                return;
+            }
+    
+            const fieldValue = document.getElementById(selectedField).value;
+    
+            fetch("/update_field", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    patient_id: patientId,
+                    field: selectedField,
+                    value: fieldValue,
+                }),
+            })
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.success) {
+                    alert("Field updated successfully!");
+                } else {
+                    alert("Error updating field: " + data.message);
+                }
+                closeModal();
+            })
+            .catch((error) => {
+                console.error("Error:", error);
+                closeModal();
+            });
+        }
+
+        function fetchPatientDetails() {
+            const patientId = document.getElementById('patient_id').value;
+            fetch(`/fetch_details/${patientId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        populateForm(data.patient);
+                        toggleButtons(data.disable_buttons);
+                    } else {
+                        resetForm();
+                        alert(data.message);
+                    }
+                });
+        }
+        async function insertNextRecord() {
+            try {
+                // Fetch the next available patient ID from the server
+                const response = await fetch('/get_next_patient_id');
+                const data = await response.json();
+        
+                if (data.success) {
+                    // Populate the patient_id field with the next ID and clear other fields
+                    resetForm();
+                    document.getElementById("patient_id").value = data.next_patient_id;
+        
+                    // Enable all buttons for new entry
+                    setButtonState(false);
+                } else {
+                    alert(data.message || "Failed to fetch the next Patient ID. Please try again.");
+                }
+            } catch (error) {
+                console.error("Error fetching next patient ID:", error);
+                alert("An error occurred while fetching the next Patient ID.");
+            }
+        }
+        
+
+        function navigatePatient(direction) {
+            const patientId = document.getElementById('patient_id').value;
+            fetch(`/navigate_patient/${direction}/${patientId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        populateForm(data.patient);
+                        toggleButtons(data.disable_buttons);
+                    } else {
+                        alert(data.message);
+                    }
+                });
+        }
+
+        function populateForm(patient) {
+            document.getElementById('patient_id').value = patient.patient_id;
+            document.getElementById('name').value = patient.name;
+            document.getElementById('dob').value = patient.dob;
+            document.getElementById('gender_male').checked = patient.gender === 'Male';
+            document.getElementById('gender_female').checked = patient.gender === 'Female';
+            document.getElementById('age').value = patient.age;
+            document.getElementById('address').value = patient.address;
+            document.getElementById('phone').value = patient.phone;
+            document.getElementById('patient_type').value = patient.patient_type;
+        }
+
+        function toggleButtons(disable) {
+            document.querySelector("[name='save']").disabled = disable;
+            document.querySelector("[name='update']").disabled = disable;
+            document.querySelector("[name='delete']").disabled = disable;
+            document.querySelector("[name='commit']").disabled = disable;
+            document.querySelector("[name='clear']").disabled = disable;
+        }
+
+        function resetForm() {
+            document.getElementById('patient-form').reset();
+        }
+        // Initialize Flatpickr for the date input
+        flatpickr("#dob", {
+            dateFormat: "d-M-Y", // Format as dd-Mon-yyyy
+        });
+        async function fetchPatientDetails(patientId) {
+        if (!patientId) {
+            resetForm();
+            return;
+        }
+
+        try {
+            const response = await fetch(`/fetch_details/${patientId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                // Populate form with fetched data
+                document.getElementById("name").value = data.data.name || "";
+                document.getElementById("dob").value = data.data.dob || "";
+                document.getElementById("gender_male").checked = (data.data.gender === "Male");
+                document.getElementById("gender_female").checked = (data.data.gender === "Female");
+                document.getElementById("age").value = data.data.age || "";
+                document.getElementById("address").value = data.data.address || "";
+                document.getElementById("phone").value = data.data.phone || "";
+                document.getElementById("patient_type").value = data.data.patient_type || "";
+
+                // Enable or disable buttons based on the record's status
+                const disableButtons = data.disable_buttons;
+                setButtonState(disableButtons);
+            } else {
+                // Reset form and prepare for new entry
+                resetForm();
+                alert("The entered Patient ID is new. Please provide the details.");
+            }
+        } catch (error) {
+            console.error("Error fetching patient details:", error);
+            alert("An error occurred while fetching patient details.");
+        }
+    }
+
+    function resetForm() {
+        // Reset all form fields except the patient_id field
+        document.getElementById("name").value = "";
+        document.getElementById("dob").value = "";
+        document.getElementById("gender_male").checked = false;
+        document.getElementById("gender_female").checked = false;
+        document.getElementById("age").value = "";
+        document.getElementById("address").value = "";
+        document.getElementById("phone").value = "";
+        document.getElementById("patient_type").value = "";
+
+        // Enable buttons for new entry
+        setButtonState(false);
+    }
+
+    function setButtonState(disable) {
+        // Enable or disable buttons
+        document.querySelector("[name='save']").disabled = disable;
+        document.querySelector("[name='update']").disabled = disable;
+        document.querySelector("[name='delete']").disabled = disable;
+        document.querySelector("[name='commit']").disabled = disable;
+        document.querySelector("[name='clear']").disabled = disable;
+    }
+    async function commitPatient() {
+    try {
+        const response = await fetch('/commit_patient', {
+            method: 'POST',
+            body: new FormData(document.querySelector('form')) // Send the form data
+        });
+        const data = await response.json();
+
+        // Disable buttons if the patient_id exists in main_table
+        if (data.disable_buttons) {
+            setButtonState(true);
+        }
+
+        alert(data.message || "Patient record committed successfully.");
+    } catch (error) {
+        console.error("Error committing patient:", error);
+        alert("An error occurred while committing the patient.");
+    }
+}
+
+function setButtonState(disable) {
+    // Enable or disable all form buttons
+    document.querySelector("[name='save']").disabled = disable;
+    document.querySelector("[name='update']").disabled = disable;
+    document.querySelector("[name='delete']").disabled = disable;
+    document.querySelector("[name='commit']").disabled = disable;
+    document.querySelector("[name='clear']").disabled = disable;
+}
+
+
+        
+    </script>
+
+</body>
+</html>

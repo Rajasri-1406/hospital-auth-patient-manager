@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buffer Table</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            font-size: 2em;
+            margin-bottom: 20px;
+        }
+
+        .buffer-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 16px;
+            text-align: left;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+        }
+
+        .buffer-table thead {
+            background-color: #007BFF;
+            color: #ffffff;
+            text-transform: uppercase;
+        }
+
+        .buffer-table th {
+            padding: 12px 15px;
+            font-weight: bold;
+        }
+
+        .buffer-table td {
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            color: #555;
+        }
+
+        .buffer-table tbody tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .buffer-table tbody tr:nth-child(odd) {
+            background-color: #ffffff;
+        }
+
+        .buffer-table tbody tr:hover {
+            background-color: #cce5ff;
+            transition: background-color 0.3s ease;
+            cursor: pointer;
+        }
+
+        .buffer-table caption {
+            font-size: 18px;
+            font-weight: bold;
+            padding: 10px;
+            background-color: #007BFF;
+            color: white;
+            border-bottom: 3px solid #0056b3;
+        }
+
+        /* Responsive design for small screens */
+        @media (max-width: 600px) {
+            .buffer-table thead {
+                display: none;
+            }
+
+            .buffer-table,
+            .buffer-table tbody,
+            .buffer-table tr,
+            .buffer-table td {
+                display: block;
+                width: 100%;
+            }
+
+            .buffer-table tr {
+                margin-bottom: 15px;
+                background-color: white;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                border-radius: 8px;
+                overflow: hidden;
+            }
+
+            .buffer-table td {
+                text-align: right;
+                padding-left: 50%;
+                position: relative;
+            }
+
+            .buffer-table td::before {
+                content: attr(data-label);
+                position: absolute;
+                left: 0;
+                width: 50%;
+                padding-left: 15px;
+                font-weight: bold;
+                text-align: left;
+                color: #333;
+            }
+        }
+    </style>
+</head>
+<body>
+    <form method="POST">
+        <h1>Buffer Table</h1>
+        <table class="buffer-table">
+            <caption>Patient Records</caption>
+            <thead>
+                <tr>
+                    <th>Patient ID</th>
+                    <th>Name</th>
+                    <th>Date of Birth</th>
+                    <th>Gender</th>
+                    <th>Age</th>
+                    <th>Address</th>
+                    <th>Phone</th>
+                    <th>Patient Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in records %}
+                <tr>
+                    <td data-label="Patient ID">{{ record.patient_id }}</td>
+                    <td data-label="Name">{{ record.name }}</td>
+                    <td data-label="Date of Birth">{{ record.dob }}</td>
+                    <td data-label="Gender">{{ record.gender }}</td>
+                    <td data-label="Age">{{ record.age }}</td>
+                    <td data-label="Address">{{ record.address }}</td>
+                    <td data-label="Phone">{{ record.phone }}</td>
+                    <td data-label="Patient Type">{{ record.patient_type }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </form>
+</body>
+</html>
